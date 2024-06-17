@@ -9,10 +9,13 @@ edition = "2021"
 # winapi = { version = "0.3.9", features = ["libloaderapi", "minwindef", "processthreadsapi", "psapi", "winnt", "consoleapi", "fileapi", "handleapi", "processenv", "winbase", "wincon"] }
 env_logger = "0.11.3"
 log = "0.4.21"
+anyhow = "1.0.86"
+thiserror = "1.0.61"
+ansi_term = "0.12.1"
 
 [dependencies.windows]
 version = "0.57.0"
-features = ["Win32_System_Console", 
+features = ["Win32_System_Console",
             "Win32_System_LibraryLoader",
             "Win32_System_SystemServices",
             "Win32_System_Threading",

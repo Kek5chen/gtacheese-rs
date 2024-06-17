@@ -1,5 +1,6 @@
-use log::LevelFilter;
 use std::ffi::c_void;
+use ansi_term::Color::Red;
+use log::LevelFilter;
 use windows::Win32::Foundation::*;
 use windows::Win32::System::Console::*;
 use windows::Win32::System::LibraryLoader::*;
@@ -10,12 +11,15 @@ mod cheese;
 
 unsafe extern "system" fn on_attach(dll: *mut c_void) -> u32 {
     let dll = HINSTANCE(dll as isize);
-    if AllocConsole().is_err() {
+    if cfg!(debug_assertions) && AllocConsole().is_err() {
         println!("Failed to initialize console! Wait, who am I talking to again?");
         return 1;
     }
 
     if let Err(e) = env_logger::Builder::new()
+        .format_timestamp(None)
+        .format_module_path(false)
+        .format_target(false)
         .filter_level(LevelFilter::Debug)
         .try_init()
     {
@@ -25,9 +29,14 @@ unsafe extern "system" fn on_attach(dll: *mut c_void) -> u32 {
 
     log::debug!("Initialized environment logger");
 
-    cheese::main();
+    match cheese::main() {
+        Ok(()) => log::info!("Successfully shutting down"),
+        Err(e) => log::error!("{}: {e}", Red.paint("Error caused cheese to crash out of execution. Error was caught but fatal")),
+    }
 
-    FreeConsole().unwrap();
+    if cfg!(debug_assertions) {
+        FreeConsole().unwrap();
+    }
 
     FreeLibraryAndExitThread(dll, 0);
 }

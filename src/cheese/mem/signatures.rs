@@ -1,45 +1,59 @@
 use std::ffi::c_void;
+use std::fmt::Formatter;
 use std::mem::size_of;
 use std::ptr;
+use thiserror::Error;
 use windows::Win32::System::Memory::*;
 
-fn hex_parse_error(sig: &str, byte: &str) {
-    if cfg!(debug_assertions) {
-        log::error!(
-            "Failed to parse byte \"{}\" in signature {}. CRASHING, SINCE WE'RE IN DEBUG MODE!",
-            sig,
-            byte
-        );
-        panic!("")
-    } else {
-        log::warn!(
-            "Failed to parse byte \"{}\" in signature {}. Ignoring this byte instead.",
-            sig,
-            byte
-        );
+#[derive(Error, Debug)]
+pub struct SignatureError(String);
+
+impl std::fmt::Display for SignatureError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
-fn transform_sig_from_human(sig: &str) -> Vec<Option<u8>> {
-    sig.split_whitespace()
-        .map(|b| {
-            if b.starts_with('?') || b.len() > 2 {
-                None
-            } else {
-                match u8::from_str_radix(b, 16) {
-                    Ok(n) => Some(n),
-                    Err(_) => {
-                        hex_parse_error(sig, b);
-                        None
-                    }
+fn handle_hex_parse_error(
+    transformed: &mut Vec<Option<u8>>,
+    sig: &str,
+    byte: &str,
+) -> Result<(), SignatureError> {
+    if cfg!(debug_assertions) {
+        Err(SignatureError(format!(
+            "Failed to parse byte \"{}\" in signature {}. CRASHING, SINCE WE'RE IN DEBUG MODE!",
+            sig, byte
+        )))
+    } else {
+        log::warn!(
+            "Failed to parse byte \"{}\" in signature {}. Turning this byte into a wildcard (\"??\") instead. Make sure to fix this.",
+            sig,
+            byte
+        );
+        transformed.push(None);
+        Ok(())
+    }
+}
+
+fn transform_sig_from_human(sig: &str) -> Result<Vec<Option<u8>>, SignatureError> {
+    let mut transformed = Vec::new();
+    for b in sig.split_whitespace() {
+        if b.starts_with('?') || b.len() > 2 {
+            transformed.push(None)
+        } else {
+            match u8::from_str_radix(b, 16) {
+                Ok(n) => transformed.push(Some(n)),
+                Err(_) => {
+                    handle_hex_parse_error(&mut transformed, sig, b)?;
                 }
             }
-        })
-        .collect()
+        }
+    }
+    Ok(transformed)
 }
 
 fn sniff_region(haystack: &[u8], needle: &[Option<u8>]) -> Option<usize> {
-    if needle.len() > haystack.len() {
+    if needle.len() > haystack.len() || haystack.is_empty() {
         return None;
     }
 
@@ -67,7 +81,7 @@ unsafe fn apply_offsets(mut addr: usize, offsets: Option<&[usize]>) -> usize {
         log::debug!("  - Said that he had offsets, but was lying");
         return addr;
     }
-    
+
     let deref_offset_count = (offsets.len() - 1).saturating_sub(1) + 1;
 
     for &offset in offsets.iter().take(deref_offset_count) {
@@ -82,7 +96,7 @@ unsafe fn apply_offsets(mut addr: usize, offsets: Option<&[usize]>) -> usize {
             addr as *const c_void
         );
     }
-    
+
     if offsets.len() > 1 {
         addr += offsets[offsets.len() - 1];
     }
@@ -91,11 +105,14 @@ unsafe fn apply_offsets(mut addr: usize, offsets: Option<&[usize]>) -> usize {
 }
 
 #[allow(dead_code)]
-pub unsafe fn scan_for_data_sig<T>(sig_str: &str, offsets: Option<&[usize]>) -> Option<*mut T> {
+pub unsafe fn scan_for_data_sig<T>(
+    sig_str: &str,
+    offsets: Option<&[usize]>,
+) -> Result<*mut T, SignatureError> {
     scan_for_sig(sig_str, offsets, false)
 }
 
-pub unsafe fn scan_sig<T>(sig_str: &str, offsets: Option<&[usize]>) -> Option<*mut T> {
+pub unsafe fn scan_sig<T>(sig_str: &str, offsets: Option<&[usize]>) -> Result<*mut T, SignatureError> {
     scan_for_sig(sig_str, offsets, true)
 }
 
@@ -103,8 +120,8 @@ pub unsafe fn scan_for_sig<T>(
     sig_str: &str,
     offsets: Option<&[usize]>,
     include_code: bool,
-) -> Option<*mut T> {
-    let sig = transform_sig_from_human(sig_str);
+) -> Result<*mut T, SignatureError> {
+    let sig = transform_sig_from_human(sig_str)?;
     log::debug!(
         "Starting pattern scan for {} length signature {} (Converted: {:?})",
         sig.len(),
@@ -134,8 +151,7 @@ pub unsafe fn scan_for_sig<T>(
         count += 1;
 
         if (mask & mbi.Protect) == mask {
-            let memory =
-                std::slice::from_raw_parts(mbi.BaseAddress as *const u8, mbi.RegionSize);
+            let memory = std::slice::from_raw_parts(mbi.BaseAddress as *const u8, mbi.RegionSize);
             if let Some(offset) = sniff_region(memory, &sig) {
                 let found_pattern_addr = mbi.BaseAddress.byte_add(offset) as usize;
                 log::debug!(
@@ -145,12 +161,11 @@ pub unsafe fn scan_for_sig<T>(
                 );
 
                 let final_addr = apply_offsets(found_pattern_addr, offsets);
-                return Some(final_addr as *mut T);
+                return Ok(final_addr as *mut T);
             }
         }
         address += mbi.RegionSize;
     }
 
-    log::debug!("Did not find signature. Scanned {} regions", count);
-    None
+    Err(SignatureError(format!("Did not find signature. Scanned {} regions", count)))
 }
