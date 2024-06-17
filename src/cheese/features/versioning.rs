@@ -1,5 +1,5 @@
 use std::ffi::{ CStr, CString};
-use std::time::Duration;
+use crate::cheese::mem::signatures::scan_sig;
 
 const VERSION_SIG: &str = "48 8D 2D ?? ?? ?? ?? 48 85 C0 0F 84 70 01 00 00";
 const VERSION_OFFSETS: [usize; 2] = [3, 7];
@@ -15,14 +15,17 @@ unsafe fn get_version_inner(offsets: &[usize]) -> &'static CStr {
     CStr::from_ptr(ptr.unwrap())
 }
 
+#[allow(dead_code)]
 pub unsafe fn get_version() -> &'static CStr {
     get_version_inner(&VERSION_OFFSETS)
 }
 
+#[allow(dead_code)]
 pub unsafe fn get_raw_version() -> &'static CStr {
     get_version_inner(&RAW_VERSION_OFFSETS)
 }
 
+#[allow(dead_code)]
 pub unsafe fn get_online_version() -> &'static CStr {
     get_version_inner(&ONLINE_VERSION_OFFSETS)
 }
