@@ -7,7 +7,7 @@ const RAW_VERSION_OFFSETS: [usize; 2] = [3, 7 + 32];
 const ONLINE_VERSION_OFFSETS: [usize; 2] = [3, 7 + 64];
 
 unsafe fn get_version_inner(offsets: &[usize]) -> Result<&'static CStr, SignatureError> {
-    let ptr = scan_sig(VERSION_SIG, Some(offsets))?;
+    let ptr = scan_sig(VERSION_SIG, offsets)?;
     Ok(CStr::from_ptr(ptr))
 }
 

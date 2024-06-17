@@ -70,15 +70,9 @@ fn sniff_region(haystack: &[u8], needle: &[Option<u8>]) -> Option<usize> {
     None
 }
 
-unsafe fn apply_offsets(mut addr: usize, offsets: Option<&[usize]>) -> usize {
-    if offsets.is_none() {
-        log::debug!("  - No offsets supplied");
-        return addr;
-    }
-
-    let offsets = offsets.unwrap();
+unsafe fn apply_offsets(mut addr: usize, offsets: &[usize]) -> usize {
     if offsets.is_empty() {
-        log::debug!("  - Said that he had offsets, but was lying");
+        log::debug!("  - No offsets supplied");
         return addr;
     }
 
@@ -107,26 +101,29 @@ unsafe fn apply_offsets(mut addr: usize, offsets: Option<&[usize]>) -> usize {
 #[allow(dead_code)]
 pub unsafe fn scan_for_data_sig<T>(
     sig_str: &str,
-    offsets: Option<&[usize]>,
+    offsets: &[usize],
 ) -> Result<*mut T, SignatureError> {
     scan_for_sig(sig_str, offsets, false)
 }
 
-pub unsafe fn scan_sig<T>(sig_str: &str, offsets: Option<&[usize]>) -> Result<*mut T, SignatureError> {
+pub unsafe fn scan_sig<T>(
+    sig_str: &str,
+    offsets: &[usize],
+) -> Result<*mut T, SignatureError> {
     scan_for_sig(sig_str, offsets, true)
 }
 
 pub unsafe fn scan_for_sig<T>(
     sig_str: &str,
-    offsets: Option<&[usize]>,
+    offsets: &[usize],
     include_code: bool,
 ) -> Result<*mut T, SignatureError> {
     let sig = transform_sig_from_human(sig_str)?;
     log::debug!(
-        "Starting pattern scan for {} length signature {} (Converted: {:?})",
+        "Starting pattern scan for {} byte long signature {} and offsets {:?}",
         sig.len(),
         sig_str,
-        sig
+        offsets
     );
 
     let mut address: usize = 0;
@@ -142,12 +139,12 @@ pub unsafe fn scan_for_sig<T>(
         size_of::<MEMORY_BASIC_INFORMATION>(),
     ) != 0
     {
-        log::debug!(
-            "  - Scanning Region {} @ {:?} with size {}",
-            mbi.PartitionId,
-            mbi.BaseAddress,
-            mbi.RegionSize
-        );
+        // log::debug!(
+        //     "  - Scanning Region {} @ {:?} with size {}",
+        //     mbi.PartitionId,
+        //     mbi.BaseAddress,
+        //     mbi.RegionSize
+        // );
         count += 1;
 
         if (mask & mbi.Protect) == mask {
@@ -167,5 +164,8 @@ pub unsafe fn scan_for_sig<T>(
         address += mbi.RegionSize;
     }
 
-    Err(SignatureError(format!("Did not find signature. Scanned {} regions", count)))
+    Err(SignatureError(format!(
+        "Did not find signature. Scanned {} regions",
+        count
+    )))
 }
