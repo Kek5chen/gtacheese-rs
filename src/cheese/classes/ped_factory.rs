@@ -133,26 +133,8 @@ impl CPedFactory {
 
         MessageBox("I'm waiting here again.", "Waiting.", MB_OK);
         
-        let name = CString::new("MessageBoxA").unwrap();
-        let dll = CString::new("kernel32.dll").unwrap();
-        let mboxa = GetProcAddress(GetModuleHandleA(PCSTR(dll.as_ptr() as *const u8)).unwrap(), PCSTR(name.as_ptr() as *const u8));
-
-        let hooked = hook(mem::transmute::<_, &unsafe extern "C" fn(u32, usize, usize, u32) -> u32>(mboxa), &MessageBoxAHooked).unwrap();
-        
-        MessageBox("TestBox", "Does this still do somethin?.", MB_OK);
-
-        hooked.free().unwrap();
-        
-        
-        mem::transmute(0usize)
-        // (self.vtable.ClonePed)(self, source, b_register_as_network_object, b_link_blends, b_clone_compressed_damage)
+       (self.vtable.ClonePed)(self, source, b_register_as_network_object, b_link_blends, b_clone_compressed_damage)
     }
-}
-
-pub unsafe extern "C" fn MessageBoxAHooked(hwnd: u32, lptext: usize, lpcaption: usize, utype: u32) -> u32 {
-    log::info!("We're in boys");
-    
-    0
 }
 
 
