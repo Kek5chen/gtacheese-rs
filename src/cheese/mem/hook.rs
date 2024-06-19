@@ -17,10 +17,13 @@ pub enum HookError {
     Capstone(#[from] capstone::Error),
     #[error("{0}")]
     Windows(#[from] windows::core::Error),
-    #[error("Can't hook into section with relative operand inside of instruction")]
-    Relative,
+    #[error("Can't hook into section with relative operand inside of instruction. ({0})")]
+    Relative(String),
+    #[error("Not enough space to place jump")]
+    NotEnoughSpace,
 }
 
+#[derive(Debug)]
 pub struct Hooked<T: 'static> {
     pub(crate) original: *const T,
     original_ptr: *const c_void,
@@ -29,7 +32,7 @@ pub struct Hooked<T: 'static> {
 }
 
 const X86_MAX_FUNCTION_SIZE: usize = 15;
-const JMP_SIZE: usize = 12;
+const JMP_SIZE: usize = 13;
 
 impl<T> Hooked<T> {
     pub unsafe fn free(self) -> Result<(), HookError> {
@@ -74,7 +77,7 @@ unsafe fn set_up_trampoline(
 
     let jmp_from = tramp.add(hook_len);
     let jmp_to = to_hook.byte_add(hook_len);
-    place_jmp(jmp_from as *mut c_void, jmp_to, JMP_SIZE);
+    place_jmp(jmp_from as *mut c_void, jmp_to, JMP_SIZE)?;
 
     let mut old_prot: PAGE_PROTECTION_FLAGS = Default::default();
     VirtualProtect(
@@ -121,7 +124,13 @@ fn ensure_no_relative_addr(cs: &Capstone, insts: &Instructions) -> Result<(), Ho
             .expect("This shouldn't ever be compiled for anything but x86");
         for operand in arch_detail_x86.operands() {
             match operand.op_type {
-                X86OperandType::Imm(_) | X86OperandType::Mem(_) => return Err(HookError::Relative),
+                X86OperandType::Mem(mem) => {
+                    if mem.base().0 == 0 && mem.index().0 == 0 {
+                        return Err(HookError::Relative(i.to_string()));
+                    } else if mem.base().0 as u32 == arch::x86::X86Reg::X86_REG_RIP {
+                        return Err(HookError::Relative(i.to_string()));
+                    }
+                }
                 _ => (),
             }
         }
@@ -129,18 +138,26 @@ fn ensure_no_relative_addr(cs: &Capstone, insts: &Instructions) -> Result<(), Ho
     Ok(())
 }
 
-unsafe fn place_jmp(to_hook: *mut c_void, jmp_to: *const c_void, hook_len: usize) {
-    ptr::write_bytes(to_hook, 0x90, hook_len);
+unsafe fn place_jmp(to_hook: *mut c_void, jmp_to: *const c_void, hook_len: usize) -> Result<(), HookError> {
+    if hook_len < JMP_SIZE {
+        return Err(HookError::NotEnoughSpace);
+    }
+    
+    ptr::write_bytes(to_hook, 0x90, JMP_SIZE);
 
     let to_hook_b = to_hook as *mut u8;
 
     // mov rax, <x64-abs>
-    ptr::write_unaligned(to_hook_b, 0x48);
-    ptr::write_unaligned(to_hook_b.add(1), 0xB8);
+    ptr::write_unaligned(to_hook_b, 0x49);
+    ptr::write_unaligned(to_hook_b.add(1), 0xBA);
     ptr::write_unaligned(to_hook_b.add(2) as *mut usize, jmp_to as usize);
 
-    // jmp rax
-    ptr::write_unaligned(to_hook.add(10) as *mut u16, 0xE0FF);
+    // jmp r10
+    ptr::write_unaligned(to_hook.add(10) as *mut u16, 0x41);
+    ptr::write_unaligned(to_hook.add(11) as *mut u16, 0xff);
+    ptr::write_unaligned(to_hook.add(12) as *mut u16, 0xe2);
+    
+    Ok(())
 }
 
 unsafe fn place_jmp_protected(
@@ -152,7 +169,7 @@ unsafe fn place_jmp_protected(
 
     VirtualProtect(to_hook, hook_len, PAGE_EXECUTE_READWRITE, &mut old_prot)?;
 
-    place_jmp(to_hook as *mut c_void, jmp_to, hook_len);
+    place_jmp(to_hook as *mut c_void, jmp_to, hook_len)?;
 
     VirtualProtect(to_hook, hook_len, old_prot, &mut old_prot)?;
 
