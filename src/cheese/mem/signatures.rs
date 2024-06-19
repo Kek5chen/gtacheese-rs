@@ -1,3 +1,4 @@
+use crate::cheese::mem::mem::is_addr_valid;
 use std::ffi::c_void;
 use std::fmt::Formatter;
 use std::mem::size_of;
@@ -70,18 +71,25 @@ fn sniff_region(haystack: &[u8], needle: &[Option<u8>]) -> Option<usize> {
     None
 }
 
-unsafe fn apply_offsets(mut addr: usize, offsets: &[usize]) -> usize {
+unsafe fn apply_offsets(mut addr: usize, offsets: &[usize]) -> Result<usize, SignatureError> {
     if offsets.is_empty() {
         log::debug!("  - No offsets supplied");
-        return addr;
+        return Ok(addr);
     }
 
     let deref_offset_count = (offsets.len() - 1).saturating_sub(1) + 1;
 
     for &offset in offsets.iter().take(deref_offset_count) {
         let prev = addr;
-        let disp = ptr::read_unaligned((addr as *const u32).byte_add(offset));
-        addr += disp as usize;
+        let offsetted = addr + offset;
+        if !is_addr_valid(offsetted) {
+            return Err(SignatureError(
+                "The provided signature offsets ended up in invalid memory".to_string(),
+            ));
+        }
+
+        let disp = ptr::read_unaligned(offsetted as *const u32) as usize;
+        addr += disp;
         log::debug!(
             "  - We are at {:?} and add {:?}, this gets us a displacement of {:?} and leads to: {:?}",
             prev as *const c_void,
@@ -92,10 +100,22 @@ unsafe fn apply_offsets(mut addr: usize, offsets: &[usize]) -> usize {
     }
 
     if offsets.len() > 1 {
-        addr += offsets[offsets.len() - 1];
+        let last_offset = offsets[offsets.len() - 1];
+        addr += last_offset;
+        log::debug!(
+            "  - We end up on {:?} after we added the last offset of {:?}",
+            addr as *const c_void,
+            last_offset as *const c_void
+        );
     }
 
-    addr
+    if !is_addr_valid(addr) {
+        return Err(SignatureError(
+            "The provided signature offsets ended up in invalid memory".to_string(),
+        ));
+    }
+
+    Ok(addr)
 }
 
 #[allow(dead_code)]
@@ -106,10 +126,7 @@ pub unsafe fn scan_for_data_sig<T>(
     scan_for_sig(sig_str, offsets, false)
 }
 
-pub unsafe fn scan_sig<T>(
-    sig_str: &str,
-    offsets: &[usize],
-) -> Result<*mut T, SignatureError> {
+pub unsafe fn scan_sig<T>(sig_str: &str, offsets: &[usize]) -> Result<*mut T, SignatureError> {
     scan_for_sig(sig_str, offsets, true)
 }
 
@@ -157,7 +174,7 @@ pub unsafe fn scan_for_sig<T>(
                     count,
                 );
 
-                let final_addr = apply_offsets(found_pattern_addr, offsets);
+                let final_addr = apply_offsets(found_pattern_addr, offsets)?;
                 return Ok(final_addr as *mut T);
             }
         }

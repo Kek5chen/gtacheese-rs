@@ -8,6 +8,7 @@ use windows::Win32::System::SystemServices::*;
 use windows::Win32::System::Threading::*;
 
 mod cheese;
+mod util;
 
 unsafe extern "system" fn on_attach(dll: *mut c_void) -> u32 {
     let dll = HINSTANCE(dll as isize);
@@ -20,7 +21,7 @@ unsafe extern "system" fn on_attach(dll: *mut c_void) -> u32 {
         .format_timestamp(None)
         .format_module_path(false)
         .format_target(false)
-        .filter_level(LevelFilter::Debug)
+        .filter_level(LevelFilter::Info)
         .try_init()
     {
         println!("Failed to initialize env_logger: {e:?}");
