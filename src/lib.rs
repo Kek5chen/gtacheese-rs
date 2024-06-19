@@ -1,4 +1,5 @@
 use std::ffi::c_void;
+use std::time::Duration;
 use ansi_term::Color::Red;
 use log::LevelFilter;
 use windows::Win32::Foundation::*;
@@ -10,18 +11,18 @@ use windows::Win32::System::Threading::*;
 mod cheese;
 mod util;
 
-unsafe extern "system" fn on_attach(dll: *mut c_void) -> u32 {
-    let dll = HINSTANCE(dll as isize);
-    if cfg!(debug_assertions) && AllocConsole().is_err() {
+unsafe fn init_debug_console() -> u32 {
+    if AllocConsole().is_err() {
         println!("Failed to initialize console! Wait, who am I talking to again?");
         return 1;
     }
+
 
     if let Err(e) = env_logger::Builder::new()
         .format_timestamp(None)
         .format_module_path(false)
         .format_target(false)
-        .filter_level(LevelFilter::Info)
+        .filter_level(LevelFilter::Debug)
         .try_init()
     {
         println!("Failed to initialize env_logger: {e:?}");
@@ -29,10 +30,26 @@ unsafe extern "system" fn on_attach(dll: *mut c_void) -> u32 {
     }
 
     log::debug!("Initialized environment logger");
+    0
+}
+
+unsafe extern "system" fn on_attach(dll: *mut c_void) -> u32 {
+    let dll = HINSTANCE(dll as isize);
+    if cfg!(debug_assertions) {
+        let result = init_debug_console();
+        if result != 0 {
+            return result;
+        }
+    }
 
     match cheese::main() {
         Ok(()) => log::info!("Successfully shutting down"),
-        Err(e) => log::error!("{}: {e}", Red.paint("Error caused cheese to crash out of execution. Error was caught but fatal")),
+        Err(e) => {
+            if cfg!(debug_assertions) {
+                log::error!("{}: {e}", Red.paint("Error caused cheese to crash out of execution. Error was caught but fatal"));
+                std::thread::sleep(Duration::from_secs(10));
+            }
+        },
     }
 
     if cfg!(debug_assertions) {
