@@ -54,5 +54,4 @@ impl CPed {
     pub unsafe fn player_info(&self) -> Option<&'static mut CPlayerInfo> {
         self.m_PlayerInfo.as_mut()
     }
-    
 }

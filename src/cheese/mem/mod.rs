@@ -1,5 +1,13 @@
+#[allow(unused)]
 pub mod signatures;
+#[allow(unused)]
 pub mod process;
+#[allow(unused)]
 pub mod error;
-pub mod mem;
+#[allow(unused)]
+mod mem;
+#[allow(unused)]
 pub mod hook;
+
+#[allow(unused)]
+pub use self::mem::*;

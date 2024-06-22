@@ -1,11 +1,8 @@
 use crate::cheese::classes::ped::CPed;
 use crate::cheese::mem::signatures::{scan_sig, SignatureError};
-use std::ffi::{c_void, CString};
-use std::{mem, ptr};
-use windows::core::PCSTR;
-use windows::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
+use std::ffi::c_void;
+use std::ptr;
 use windows::Win32::UI::WindowsAndMessaging::MB_OK;
-use crate::cheese::mem::hook::hook;
 use crate::util::MessageBox;
 
 #[derive(Debug)]
@@ -64,11 +61,11 @@ impl CControlledByInfo {
 
 type TooLazyToDefineThisFn = *const c_void;
 
-type CreatePedFn = unsafe extern "fastcall" fn(
+pub type CreatePedFn = unsafe extern "C" fn(
     this: *mut CPedFactory,
     ped_control_info: &CControlledByInfo,
     model_id: u32,
-    p_mat: [[f32; 3]; 4],
+    p_mat: &[[f32; 3]; 4],
     apply_default_variation: bool,
     should_be_cloned: bool,
     created_by_script: bool,
@@ -76,7 +73,7 @@ type CreatePedFn = unsafe extern "fastcall" fn(
     scenario_ped_created_by_concealed_player: bool,
 ) -> &'static mut CPed;
 
-type ClonePedFn = unsafe extern "fastcall" fn(
+pub type ClonePedFn = unsafe extern "C" fn(
     this: *mut CPedFactory,
     source: *const CPed,
     b_register_as_network_object: bool,
@@ -84,20 +81,21 @@ type ClonePedFn = unsafe extern "fastcall" fn(
     b_clone_compressed_damage: bool,
 ) -> &'static mut CPed;
 
+#[allow(unknown_lints)]
 #[allow(type_complexity)]
 #[allow(unused_variables, non_snake_case)]
 #[repr(C)]
 pub struct CPedFactoryVTable {
-    DESTRUCTOR: extern "fastcall" fn(this: *mut CPedFactory),
-    CreatePed: CreatePedFn,
-    CreatePedFromSource: TooLazyToDefineThisFn,
-    ClonePed: ClonePedFn,
+    pub __DESTRUCTOR: extern "fastcall" fn(this: *mut CPedFactory),
+    pub CreatePed: CreatePedFn,
+    pub CreatePedFromSource: TooLazyToDefineThisFn,
+    pub ClonePed: ClonePedFn,
 }
 
 #[allow(unused_variables, non_snake_case)]
 #[repr(C)]
 pub struct CPedFactory {
-    vtable: &'static CPedFactoryVTable,
+    pub vtable: &'static CPedFactoryVTable,
     local_player: *mut CPed,
 }
 
@@ -127,34 +125,7 @@ impl CPedFactory {
     )
         -> &'static CPed
     {
-        log::info!("CPedFactory: {:?}", self as *const CPedFactory);
-        log::info!("VTable: {:?}", self.vtable as *const CPedFactoryVTable);
-        log::info!("ClonePed: {:?}", self.vtable.ClonePed);
-
-        MessageBox("I'm waiting here again.", "Waiting.", MB_OK);
-        
-       (self.vtable.ClonePed)(self, source, b_register_as_network_object, b_link_blends, b_clone_compressed_damage)
+        (self.vtable.ClonePed)(self, source, b_register_as_network_object, b_link_blends, b_clone_compressed_damage)
     }
 }
 
-
-unsafe extern "C" fn CreatePedHook(
-    this: *mut CPedFactory,
-    ped_control_info: &CControlledByInfo,
-    model_id: u32,
-    p_mat: [[f32; 3]; 4],
-    apply_default_variation: bool,
-    should_be_cloned: bool,
-    created_by_script: bool,
-    fail_silent_if_out_of_peds: bool,
-    scenario_ped_created_by_concealed_player: bool,
-) -> &'static mut CPed {
-    log::info!("this: {:?}", this);
-    log::info!("ped_control_info: {ped_control_info:?}");
-    log::info!("model_id: {model_id}");
-    log::info!("p_mat: {p_mat:?}");
-    log::info!("apply_default_variation: {apply_default_variation}");
-    log::info!("should_be_cloned: {should_be_cloned}");
-
-    mem::transmute(0usize)
-}
