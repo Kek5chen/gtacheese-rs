@@ -6,8 +6,6 @@ pub mod process;
 pub mod error;
 #[allow(unused)]
 mod mem;
-#[allow(unused)]
-pub mod hook;
 
 #[allow(unused)]
 pub use self::mem::*;

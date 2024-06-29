@@ -1,5 +1,9 @@
+use std::mem;
+use std::mem::offset_of;
 use crate::cheese::classes::math::Vector4;
+use crate::cheese::classes::ped_factory::CPedFactory;
 use crate::cheese::classes::player_info::CPlayerInfo;
+use crate::cheese::main::PROC;
 
 #[repr(C, align(8))]
 pub struct CPed {
@@ -50,8 +54,24 @@ pub struct CPed {
     m_pMyVehicle: u64,
 }
 
+pub struct CPedPtr(pub(super) usize);
+
 impl CPed {
-    pub unsafe fn player_info(&self) -> Option<&'static mut CPlayerInfo> {
-        self.m_PlayerInfo.as_mut()
+    pub unsafe fn local_player() -> Option<CPedPtr> {
+        CPedFactory::get_local_player()
+    }
+}
+
+impl CPedPtr {
+    pub unsafe fn player_info(&self) -> Option<CPlayerInfo> {
+        PROC.read::<CPlayerInfo>(self.0 + offset_of!(CPed, m_PlayerInfo))
+    }
+    
+    pub unsafe fn set_seatbelt(&self, on: bool) -> anyhow::Result<()> {
+        let byte= match on {
+            true => 0xC9,
+            false => 0xC8,
+        };
+        Ok(PROC.write(self.0 + 0x143C, byte)?)
     }
 }

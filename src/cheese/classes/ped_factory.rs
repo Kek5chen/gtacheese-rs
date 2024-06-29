@@ -1,9 +1,9 @@
-use crate::cheese::classes::ped::CPed;
-use crate::cheese::mem::signatures::{scan_sig, SignatureError};
+use crate::cheese::classes::ped::{CPed, CPedPtr};
+use crate::cheese::mem::signatures::SignatureError;
 use std::ffi::c_void;
+use std::mem::offset_of;
 use std::ptr;
-use windows::Win32::UI::WindowsAndMessaging::MB_OK;
-use crate::util::MessageBox;
+use crate::cheese::main::PROC;
 
 #[derive(Debug)]
 #[allow(unused_variables, non_snake_case)]
@@ -59,43 +59,10 @@ impl CControlledByInfo {
     }
 }
 
-type TooLazyToDefineThisFn = *const c_void;
-
-pub type CreatePedFn = unsafe extern "C" fn(
-    this: *mut CPedFactory,
-    ped_control_info: &CControlledByInfo,
-    model_id: u32,
-    p_mat: &[[f32; 3]; 4],
-    apply_default_variation: bool,
-    should_be_cloned: bool,
-    created_by_script: bool,
-    fail_silent_if_out_of_peds: bool,
-    scenario_ped_created_by_concealed_player: bool,
-) -> &'static mut CPed;
-
-pub type ClonePedFn = unsafe extern "C" fn(
-    this: *mut CPedFactory,
-    source: *const CPed,
-    b_register_as_network_object: bool,
-    b_link_blends: bool,
-    b_clone_compressed_damage: bool,
-) -> &'static mut CPed;
-
-#[allow(unknown_lints)]
-#[allow(type_complexity)]
-#[allow(unused_variables, non_snake_case)]
-#[repr(C)]
-pub struct CPedFactoryVTable {
-    pub __DESTRUCTOR: extern "fastcall" fn(this: *mut CPedFactory),
-    pub CreatePed: CreatePedFn,
-    pub CreatePedFromSource: TooLazyToDefineThisFn,
-    pub ClonePed: ClonePedFn,
-}
-
 #[allow(unused_variables, non_snake_case)]
 #[repr(C)]
 pub struct CPedFactory {
-    pub vtable: &'static CPedFactoryVTable,
+    pub vtable: *const c_void,
     local_player: *mut CPed,
 }
 
@@ -104,28 +71,24 @@ const FACTORY_INSTANCE_OFFSETS: [usize; 2] = [3, 7];
 
 static mut INSTANCE: *mut *mut CPedFactory = ptr::null_mut();
 
+pub struct CPedFactoryPtr(usize);
+
 impl CPedFactory {
     pub unsafe fn init() -> Result<(), SignatureError> {
-        INSTANCE = scan_sig(FACTORY_INSTANCE, &FACTORY_INSTANCE_OFFSETS)?;
+        INSTANCE = PROC.scan_sig(FACTORY_INSTANCE, &FACTORY_INSTANCE_OFFSETS)?;
         Ok(())
     }
-    pub unsafe fn get_instance() -> Option<&'static mut CPedFactory> {
-        (*INSTANCE).as_mut()
+    pub unsafe fn get_instance() -> CPedFactoryPtr {
+        CPedFactoryPtr(PROC.read::<usize>(INSTANCE as usize).unwrap())
     }
-
-    pub unsafe fn local_player<'a, 'b>(&'a self) -> Option<&'b mut CPed> {
-        self.local_player.as_mut()
-    }
-    
-    pub unsafe fn clone_ped(&mut self,
-                            source: *const CPed,
-                            b_register_as_network_object: bool,
-                            b_link_blends: bool,
-                            b_clone_compressed_damage: bool,
-    )
-        -> &'static CPed
-    {
-        (self.vtable.ClonePed)(self, source, b_register_as_network_object, b_link_blends, b_clone_compressed_damage)
+    pub unsafe fn get_local_player() -> Option<CPedPtr> {
+        Self::get_instance().local_player()
     }
 }
 
+impl CPedFactoryPtr {
+    pub unsafe fn local_player(&self) -> Option<CPedPtr> {
+        let local = CPedPtr(PROC.read::<usize>(self.0 + offset_of!(CPedFactory, local_player))?);
+        Some(local).filter(|x| x.0 != 0)
+    }
+}

@@ -32,10 +32,4 @@ pub struct CWanted {
 }
 
 impl CWanted {
-    pub unsafe fn get_local_player_wanted() -> Option<&'static mut CWanted> {
-        CPedFactory::get_instance()
-            .and_then(|fac| fac.local_player()
-                .and_then(|player| player.player_info()
-                    .map(|player_info| &mut player_info.m_Wanted)))
-    }
 }

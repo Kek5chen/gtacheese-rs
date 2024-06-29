@@ -2,11 +2,10 @@ use crate::cheese::classes::init_classes;
 use crate::cheese::features::versioning::{
     get_online_version, get_raw_version, get_version, init_versions_or_show_error,
 };
+use crate::cheese::mem::Process;
 use crate::util::MessageBox;
-use std::thread::sleep;
-use std::time::Duration;
-use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_END};
-use windows::Win32::UI::WindowsAndMessaging::MB_OK;
+use windows::Win32::UI::WindowsAndMessaging::*;
+use crate::cheese::gui::entry::run_graphics;
 
 unsafe fn init_classes_and_check_results() -> bool {
     let init_results = init_classes();
@@ -25,7 +24,18 @@ unsafe fn init_classes_and_check_results() -> bool {
     any_errors
 }
 
+pub static mut PROC: Process = Process::placeholder();
+
 pub unsafe fn main() -> anyhow::Result<()> {
+    match Process::open("GTA5.exe") {
+        Ok(proc) => PROC = proc,
+        Err(e) => {
+            log::error!("{:?}", e);
+            MessageBox("GTA V not found", "Could not find the GTA V Process", MB_OK);
+            return Ok(());
+        }
+    };
+
     if !init_versions_or_show_error() {
         return Ok(());
     }
@@ -33,9 +43,9 @@ pub unsafe fn main() -> anyhow::Result<()> {
     let version = get_version().unwrap();
     let raw_version = get_raw_version().unwrap();
     let online_version = get_online_version().unwrap();
-    log::info!("Version: {version:?} (at: {:?})", version.as_ptr());
-    log::info!("Raw Version: {raw_version:?}");
-    log::info!("Online Version: {online_version:?}");
+    log::info!("Version: {version} (at: {:?})", version.as_ptr());
+    log::info!("Raw Version: {raw_version}");
+    log::info!("Online Version: {online_version}");
 
     if init_classes_and_check_results() {
         MessageBox(
@@ -46,9 +56,8 @@ pub unsafe fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    while GetAsyncKeyState(VK_END.0 as i32) == 0 {
-        sleep(Duration::from_millis(100));
-    }
+    run_graphics();
 
     Ok(())
 }
+

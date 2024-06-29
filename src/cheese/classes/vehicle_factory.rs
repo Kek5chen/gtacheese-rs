@@ -1,6 +1,7 @@
 use std::ffi::c_void;
 use std::ptr;
-use crate::cheese::mem::signatures::{scan_sig, SignatureError};
+use crate::cheese::main::PROC;
+use crate::cheese::mem::signatures::SignatureError;
 
 const VEHICLE_FACTORY_SIG: &str = "48 8B 3D ?? ?? ?? ?? 8B 96 40 03 00 00 48 8B 07 48 8B CF";
 const VEHICLE_FACTORY_OFFSETS: [usize; 2] = [3, 7];
@@ -33,7 +34,7 @@ static mut INSTANCE: *mut *mut CVehicleFactory = ptr::null_mut();
 
 impl CVehicleFactory {
     pub unsafe fn init() -> Result<(), SignatureError> {
-        INSTANCE = scan_sig(VEHICLE_FACTORY_SIG, &VEHICLE_FACTORY_OFFSETS)?;
+        INSTANCE = PROC.scan_sig(VEHICLE_FACTORY_SIG, &VEHICLE_FACTORY_OFFSETS)?;
         Ok(())
     }
 

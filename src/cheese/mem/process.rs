@@ -1,6 +1,8 @@
-use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use crate::cheese::mem::Process;
 
-#[allow(dead_code)]
-pub unsafe fn get_base_addr() -> usize {
-    GetModuleHandleW(None).unwrap().0 as usize // executable base address should always be found
+impl Process {
+    #[allow(dead_code)]
+    pub unsafe fn get_base_addr(&self) -> usize {
+        self.base_address
+    }
 }
