@@ -23,7 +23,8 @@ pub struct CPed {
     dword230: u32,
     gap234: [u8; 76],
     health: f32,
-    gap284: [u8; 2996],
+    max_health: f32,
+    gap288: [u8; 2992],
     charE38: i8,
     gapE39: [u8; 599],
     byte1090: u8,
@@ -73,5 +74,20 @@ impl CPedPtr {
             false => 0xC8,
         };
         Ok(PROC.write(self.0 + 0x143C, byte)?)
+    }
+    pub unsafe fn get_max_health(&self) -> Option<f32> {
+        PROC.read::<f32>(self.0 + offset_of!(CPed, max_health))
+    }
+
+    pub unsafe fn get_health(&self) -> Option<f32> {
+        PROC.read::<f32>(self.0 + offset_of!(CPed, health))
+    }
+
+    pub unsafe fn set_health(&self, health: f32) -> anyhow::Result<()> {
+        Ok(PROC.write(self.0 + offset_of!(CPed, health), health)?)
+    }
+    
+    pub unsafe fn kill(&self) -> anyhow::Result<()> {
+        Ok(PROC.write(self.0 + offset_of!(CPed, health), 0)?)
     }
 }

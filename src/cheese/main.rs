@@ -2,10 +2,10 @@ use crate::cheese::classes::init_classes;
 use crate::cheese::features::versioning::{
     get_online_version, get_raw_version, get_version, init_versions_or_show_error,
 };
+use crate::cheese::gui::entry::run_graphics;
 use crate::cheese::mem::Process;
 use crate::util::MessageBox;
 use windows::Win32::UI::WindowsAndMessaging::*;
-use crate::cheese::gui::entry::run_graphics;
 
 unsafe fn init_classes_and_check_results() -> bool {
     let init_results = init_classes();
@@ -60,4 +60,3 @@ pub unsafe fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
-
