@@ -1,12 +1,14 @@
-use crate::cheese::gui::colors::{MENU_PRIMARY_COLOR, MENU_SHADOW_COLOR};
-use eframe::egui::{CentralPanel, Context, CursorIcon, Frame, Ui};
 use std::cell::RefCell;
 use std::rc::Rc;
+
+use eframe::egui::{CentralPanel, Color32, Context, Frame, RichText, Ui};
+
+use crate::cheese::gui::colors::MENU_SHADOW_COLOR;
 
 pub(super) enum MenuEntry {
     Execute {
         name: String,
-        function: fn(),
+        function: fn() -> anyhow::Result<()>,
     },
     State {
         name: String,
@@ -27,16 +29,20 @@ impl MenuEntry {
         }
     }
 
-    pub fn draw_inner(&self, ui: &mut Ui) {
+    pub fn draw_inner(&self, ui: &mut Ui, is_selected: bool) {
+        let mut text = RichText::new(self.name()).size(17.);
+        if is_selected {
+            text = text
+                .background_color(MENU_SHADOW_COLOR)
+                .color(Color32::WHITE)
+                .italics();
+        }
         match self {
-            MenuEntry::Execute { name, function } => {
-                ui.label(name);
+            MenuEntry::Execute { name, .. } | MenuEntry::Redirect { name, .. } => {
+                ui.label(text);
             }
             MenuEntry::State { name, state } => {
-                ui.checkbox(&mut state.borrow_mut(), name);
-            }
-            MenuEntry::Redirect { name, to_menu_id } => {
-                ui.label(name).on_hover_cursor(CursorIcon::PointingHand);
+                ui.checkbox(&mut state.borrow_mut(), text);
             }
         }
     }
@@ -48,10 +54,10 @@ impl MenuEntry {
             ui.allocate_ui([available_width, 0.0].into(), |ui| {
                 Frame::none()
                     .fill(MENU_SHADOW_COLOR)
-                    .show(ui, |ui| self.draw_inner(ui))
+                    .show(ui, |ui| self.draw_inner(ui, is_selected))
             });
         } else {
-            self.draw_inner(ui)
+            self.draw_inner(ui, is_selected)
         }
     }
 }
@@ -63,11 +69,13 @@ pub(super) struct MenuDefinition {
 }
 
 impl MenuDefinition {
+    const BACK_TEXT: &'static str = "<< Back";
+
     pub fn new(name: &str) -> Self {
         MenuDefinition {
             name: name.to_string(),
             entries: vec![MenuEntry::Redirect {
-                name: "<< Back".to_string(),
+                name: Self::BACK_TEXT.to_string(),
                 to_menu_id: 0,
             }],
             selected: 0,
@@ -82,14 +90,22 @@ impl MenuDefinition {
         self.entries.iter().find(|&entry| entry.name() == name)
     }
 
+    pub fn replace_back_link(&mut self, new_to_menu_id: u32) {
+        if let Some(MenuEntry::Redirect { name, to_menu_id }) = self.entries.get_mut(0) {
+            if name != Self::BACK_TEXT {
+                return;
+            }
+            *to_menu_id = new_to_menu_id;
+        }
+    }
+
     pub fn draw(&self, ctx: &Context) {
-        CentralPanel::default()
-            .show(ctx, |ui| {
-                ui.vertical(|ui| {
-                    for (i, entry) in self.entries.iter().enumerate() {
-                        entry.draw(ui, i == self.selected);
-                    }
-                });
+        CentralPanel::default().show(ctx, |ui| {
+            ui.vertical(|ui| {
+                for (i, entry) in self.entries.iter().enumerate() {
+                    entry.draw(ui, i == self.selected);
+                }
             });
+        });
     }
 }

@@ -1,8 +1,10 @@
-use super::entry::TheCheese;
-use crate::cheese::gui::menu_definition::MenuEntry;
-use crate::cheese::gui::menus::MAIN_MENU_ID;
 use eframe::egui::*;
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
+
+use crate::cheese::gui::menu_definition::MenuEntry;
+use crate::cheese::gui::menus::MAIN_MENU_ID;
+
+use super::entry::TheCheese;
 
 pub(super) fn draw_header(ctx: &Context) {
     TopBottomPanel::top("header").show(ctx, |ui| {
@@ -110,7 +112,10 @@ impl TheCheese {
         if let Some(menu) = self.menu_definitions.get_mut(&self.current_menu_id) {
             if let Some(entry) = menu.entries.get(menu.selected) {
                 match entry {
-                    MenuEntry::Execute { function, .. } => function(),
+                    MenuEntry::Execute { function, name } => match function() {
+                        Ok(()) => {}
+                        Err(e) => log::warn!("Function {} exited with error: {}", name, e),
+                    },
                     MenuEntry::State { state, .. } => {
                         let mut state = state.borrow_mut();
                         *state = !*state;

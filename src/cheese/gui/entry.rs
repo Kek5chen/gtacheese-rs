@@ -1,12 +1,22 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use crate::cheese::classes::ped::CPed;
-use crate::cheese::gui::main_elements::{draw_credits_footer, draw_header, draw_keybinds_footer};
+use std::sync::Once;
+use std::time::Duration;
+
 use eframe::egui::*;
 use eframe::CreationContext;
+use windows::Win32::Foundation::{BOOL, COLORREF, HWND, LPARAM, MAX_PATH, TRUE};
+use windows::Win32::System::Threading::GetCurrentProcessId;
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_END};
+use windows::Win32::UI::WindowsAndMessaging::{
+    EnumWindows, GetWindowTextW, GetWindowThreadProcessId, SetLayeredWindowAttributes, LWA_ALPHA,
+};
+
+use crate::cheese::classes::ped::CPed;
+use crate::cheese::classes::wanted::CWanted;
 use crate::cheese::gui::colors::MENU_PRIMARY_COLOR;
+use crate::cheese::gui::main_elements::{draw_credits_footer, draw_header, draw_keybinds_footer};
 use crate::cheese::gui::menu_definition::MenuDefinition;
 use crate::cheese::gui::menus::MAIN_MENU_ID;
 
@@ -16,6 +26,7 @@ pub(super) struct TheCheese {
     pub(crate) just_pressed_end: bool,
     pub(crate) seatbelt: Rc<RefCell<bool>>,
     pub(crate) godmode: Rc<RefCell<bool>>,
+    pub(crate) never_wanted: Rc<RefCell<bool>>,
     pub(crate) current_menu_id: u32,
     pub(crate) menu_definitions: HashMap<u32, MenuDefinition>,
 }
@@ -32,7 +43,7 @@ impl TheCheese {
             current_menu_id: MAIN_MENU_ID,
             ..Default::default()
         };
-        
+
         me.setup_menus();
         me
     }
@@ -66,9 +77,10 @@ impl TheCheese {
     }
 
     unsafe fn handle_state(&self) -> anyhow::Result<()> {
-        self.seatbelt()?;
-        self.godmode()?;
-        
+        let _ = self.seatbelt();
+        let _ = self.godmode();
+        let _ = self.never_wanted();
+
         Ok(())
     }
 
@@ -78,7 +90,7 @@ impl TheCheese {
         }
         Ok(())
     }
-    
+
     unsafe fn godmode(&self) -> anyhow::Result<()> {
         if *self.godmode.borrow() {
             if let Some(local_player) = CPed::local_player() {
@@ -91,6 +103,15 @@ impl TheCheese {
                         local_player.set_health(max_health)?;
                     }
                 }
+            }
+        }
+        Ok(())
+    }
+
+    unsafe fn never_wanted(&self) -> anyhow::Result<()> {
+        if *self.never_wanted.borrow() {
+            if let Some(wanted) = CWanted::get_local_wanted() {
+                wanted.set_wanted_level(0)?;
             }
         }
         Ok(())
@@ -112,13 +133,15 @@ impl TheCheese {
 
 impl eframe::App for TheCheese {
     fn update(&mut self, ctx: &Context, frame: &mut eframe::Frame) {
+        init_window_visibility_fix();
+
+        ctx.request_repaint_after(Duration::from_millis(1000 / 60));
+
         self.handle_window_hiding();
 
         unsafe {
             self.handle_state().unwrap();
         }
-
-        ctx.request_repaint();
 
         if self.window_hidden {
             return;
@@ -127,7 +150,7 @@ impl eframe::App for TheCheese {
         draw_header(ctx);
         draw_credits_footer(ctx);
         draw_keybinds_footer(ctx);
-        unsafe { self.update_cheat_menu(); }
+        self.update_cheat_menu();
         self.draw_cheat_menu(ctx);
     }
 
@@ -139,16 +162,16 @@ impl eframe::App for TheCheese {
 pub unsafe fn run_graphics() {
     let options = eframe::NativeOptions {
         viewport: ViewportBuilder::default()
-            //.with_mouse_passthrough(true)
+            .with_visible(true)
+            .with_mouse_passthrough(true)
             .with_always_on_top()
             .with_inner_size([300.0, 600.0])
             .with_position([20.0, 20.0])
             .with_titlebar_shown(false)
             .with_titlebar_buttons_shown(false)
-            .with_resizable(false)
             .with_decorations(false)
             .with_transparent(true)
-            .with_visible(true),
+            .with_resizable(false),
         ..Default::default()
     };
     eframe::run_native(
@@ -157,4 +180,35 @@ pub unsafe fn run_graphics() {
         Box::new(|cc| Box::new(TheCheese::new(cc))),
     )
     .expect("OUCH");
+}
+
+static INIT_WINDOW_VISIBILITY_FIX: Once = Once::new();
+
+pub fn init_window_visibility_fix() {
+    INIT_WINDOW_VISIBILITY_FIX.call_once(|| {
+        if let Err(e) = fix_window_visibility() {
+            log::error!("Failed to fix window visibility: {:?}", e);
+        }
+    });
+}
+
+fn fix_window_visibility() -> windows::core::Result<()> {
+    unsafe { EnumWindows(Some(enum_window_proc), LPARAM(0)) }
+}
+
+extern "system" fn enum_window_proc(hwnd: HWND, _: LPARAM) -> BOOL {
+    let mut class_name_buffer = [0u16; MAX_PATH as usize];
+
+    unsafe {
+        let mut process_id: u32 = 0;
+        GetWindowThreadProcessId(hwnd, Some(&mut process_id));
+        if process_id == GetCurrentProcessId() {
+            if GetWindowTextW(hwnd, &mut class_name_buffer) == 0 {
+                return TRUE;
+            }
+
+            let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_ALPHA);
+        }
+    }
+    TRUE
 }

@@ -1,9 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::time::Duration;
+
 use ansi_term::Color::Red;
 use log::LevelFilter;
-use std::time::Duration;
-use windows::Win32::System::Console::*;
 
 mod cheese;
 mod util;

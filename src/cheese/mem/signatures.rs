@@ -1,11 +1,13 @@
-use crate::cheese::mem::mem::is_addr_valid;
-use crate::cheese::mem::Process;
 use std::ffi::c_void;
 use std::fmt::Formatter;
 use std::mem::size_of;
 use std::ptr;
+
 use thiserror::Error;
 use windows::Win32::System::Memory::*;
+
+use crate::cheese::mem::mem::is_addr_valid;
+use crate::cheese::mem::Process;
 
 #[derive(Error, Debug)]
 pub struct SignatureError(String);
@@ -96,7 +98,8 @@ impl Process {
 
             let disp = self
                 .read::<u32>(offsetted)
-                .ok_or_else(|| SignatureError("Could not read offset".to_string()))? as usize;
+                .ok_or_else(|| SignatureError("Could not read offset".to_string()))?
+                as usize;
 
             addr += disp;
             log::debug!(
@@ -128,28 +131,28 @@ impl Process {
     }
 
     #[allow(dead_code)]
-    pub unsafe fn scan_for_data_sig<T>(
+    pub unsafe fn scan_for_data_sig(
         &self,
         sig_str: &str,
         offsets: &[usize],
-    ) -> Result<*mut T, SignatureError> {
+    ) -> Result<isize, SignatureError> {
         self.scan_for_sig(sig_str, offsets, false)
     }
 
-    pub unsafe fn scan_sig<T>(
+    pub unsafe fn scan_sig(
         &self,
         sig_str: &str,
         offsets: &[usize],
-    ) -> Result<*mut T, SignatureError> {
+    ) -> Result<isize, SignatureError> {
         self.scan_for_sig(sig_str, offsets, true)
     }
 
-    pub unsafe fn scan_for_sig<T>(
+    pub unsafe fn scan_for_sig(
         &self,
         sig_str: &str,
         offsets: &[usize],
         include_code: bool,
-    ) -> Result<*mut T, SignatureError> {
+    ) -> Result<isize, SignatureError> {
         let sig = transform_sig_from_human(sig_str)?;
         log::debug!(
             "Starting pattern scan for {} byte long signature {} and offsets {:?}",
@@ -196,7 +199,7 @@ impl Process {
                     );
 
                     let final_addr = self.apply_offsets(found_pattern_addr, offsets)?;
-                    return Ok(final_addr as *mut T);
+                    return Ok(final_addr as isize);
                 }
             }
             address += mbi.RegionSize;

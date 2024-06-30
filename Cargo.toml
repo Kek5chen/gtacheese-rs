@@ -15,12 +15,14 @@ ansi_term = "0.12.1"
 lazy_static = "1.4.0"
 static_assertions = "1.1.0"
 # native-windows-gui = "1.0.13"
-eframe = "0.27.2"
+eframe = { version = "0.27.2" }
 egui_extras = { version = "0.27.2", features = ["image"] }
 image = { version = "0.25.1", features = ["png"] }
+libc = "0.2.155"
 
 [build-dependencies]
-embed-resource = "2.4.2"
+bindgen = "0.69.4"
+cc = "1.0.103"
 
 [dependencies.windows]
 version = "0.57.0"
