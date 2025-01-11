@@ -4,6 +4,11 @@ use std::rc::Rc;
 use std::sync::Once;
 use std::time::Duration;
 
+use crate::cheese::features;
+use crate::cheese::gui::colors::MENU_PRIMARY_COLOR;
+use crate::cheese::gui::main_elements::{draw_credits_footer, draw_header, draw_keybinds_footer};
+use crate::cheese::gui::menu_definition::MenuDefinition;
+use crate::cheese::gui::menus::MAIN_MENU_ID;
 use eframe::egui::*;
 use eframe::CreationContext;
 use windows::Win32::Foundation::{BOOL, COLORREF, HWND, LPARAM, MAX_PATH, TRUE};
@@ -12,13 +17,6 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_END};
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetWindowTextW, GetWindowThreadProcessId, SetLayeredWindowAttributes, LWA_ALPHA,
 };
-
-use crate::cheese::classes::ped::CPed;
-use crate::cheese::classes::wanted::CWanted;
-use crate::cheese::gui::colors::MENU_PRIMARY_COLOR;
-use crate::cheese::gui::main_elements::{draw_credits_footer, draw_header, draw_keybinds_footer};
-use crate::cheese::gui::menu_definition::MenuDefinition;
-use crate::cheese::gui::menus::MAIN_MENU_ID;
 
 #[derive(Default)]
 pub(super) struct TheCheese {
@@ -76,44 +74,15 @@ impl TheCheese {
         cc.egui_ctx.set_fonts(fonts);
     }
 
+    unsafe fn execute_state_iteration(func: unsafe fn(bool) -> anyhow::Result<()>, state: &Rc<RefCell<bool>>) {
+        let _ = func(*state.borrow());
+    }
+
     unsafe fn handle_state(&self) -> anyhow::Result<()> {
-        let _ = self.seatbelt();
-        let _ = self.godmode();
-        let _ = self.never_wanted();
+        Self::execute_state_iteration(features::player::seatbelt, &self.seatbelt);
+        Self::execute_state_iteration(features::player::godmode, &self.godmode);
+        Self::execute_state_iteration(features::player::never_wanted, &self.never_wanted);
 
-        Ok(())
-    }
-
-    unsafe fn seatbelt(&self) -> anyhow::Result<()> {
-        if let Some(local_player) = CPed::local_player() {
-            local_player.set_seatbelt(*self.seatbelt.borrow())?;
-        }
-        Ok(())
-    }
-
-    unsafe fn godmode(&self) -> anyhow::Result<()> {
-        if *self.godmode.borrow() {
-            if let Some(local_player) = CPed::local_player() {
-                local_player.set_health(100000.)?;
-            }
-        } else if let Some(local_player) = CPed::local_player() {
-            if let Some(max_health) = local_player.get_max_health() {
-                if let Some(health) = local_player.get_health() {
-                    if health > max_health {
-                        local_player.set_health(max_health)?;
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
-    unsafe fn never_wanted(&self) -> anyhow::Result<()> {
-        if *self.never_wanted.borrow() {
-            if let Some(wanted) = CWanted::get_local_wanted() {
-                wanted.set_wanted_level(0)?;
-            }
-        }
         Ok(())
     }
 

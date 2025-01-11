@@ -17,6 +17,11 @@ pub mod player_info;
 pub mod vehicle_factory;
 #[allow(unused)]
 pub mod wanted;
+pub mod inventory;
+pub mod ammo_repository;
+pub mod weapon_repository;
+mod physical;
+mod vehicle;
 
 pub unsafe fn init_classes() -> HashMap<&'static str, Result<(), SignatureError>> {
     let mut results = HashMap::new();

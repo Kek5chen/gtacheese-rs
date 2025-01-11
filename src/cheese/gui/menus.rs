@@ -126,8 +126,8 @@ impl TheCheese {
         let mut def = MenuDefinition::new("Weapon Mods");
 
         def.entries.push(MenuEntry::Execute {
-            name: "Reload All Doesn't Work".to_string(),
-            function: features::player::reload_all,
+            name: "Refill Ammo".to_string(),
+            function: features::player::refill_ammo,
         });
 
         self.menu_definitions.insert(WEAPON_MENU_ID, def);
